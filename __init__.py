@@ -1,6 +1,6 @@
-"""Baton: a Hermes plugin that seals a file and verifies the seal.
+"""AgentTrust Seal: a Hermes plugin that seals a file and verifies the seal.
 
-Registers one tool (`baton`) and one slash command (`/baton`), both thin wrappers over core.py.
+Registers one tool (`agenttrust_seal`) and one slash command (`/agenttrust-seal`), both thin wrappers over core.py.
 """
 import json
 import os
@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover
     import core
 
 SCHEMA = {
-    "name": "baton",
+    "name": "agenttrust_seal",
     "description": (
         "Seal or verify a file so a handoff can be proven unchanged. "
         "action=seal writes <path>.seal.json (sha256, author, UTC time). "
@@ -74,10 +74,10 @@ def _slash(raw_args):
     action, path, author = _split_args(raw_args)
     if action in ("seal", "verify") and path:
         return run(action, path, author)["message"]
-    return "Usage: /baton seal <file> [author] | /baton verify <file>"
+    return "Usage: /agenttrust-seal seal <file> [author] | /agenttrust-seal verify <file>"
 
 
 def register(ctx):
-    ctx.register_tool(name="baton", toolset="baton", schema=SCHEMA, handler=_tool)
-    ctx.register_command("baton", handler=_slash, description="Seal a file or verify its seal",
+    ctx.register_tool(name="agenttrust_seal", toolset="agenttrust_seal", schema=SCHEMA, handler=_tool)
+    ctx.register_command("agenttrust-seal", handler=_slash, description="Seal a file or verify its seal",
                          args_hint="seal <file> [author] | verify <file>")

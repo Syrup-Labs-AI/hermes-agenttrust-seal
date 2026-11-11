@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Baton selftest: seal-holds, tamper-caught, missing-seal-refused, plus register() wiring.
+"""AgentTrust Seal selftest: seal-holds, tamper-caught, missing-seal-refused, plus register() wiring.
 Run: python3 selftest.py   (exit 0 and a SELFTEST PASS line, or exit 1 with the failing check)
 """
 import importlib.util
@@ -43,18 +43,18 @@ try:
     # 1. seal holds, through the tool an agent would call
     ctx = FakeCtx()
     baton.register(ctx)
-    s = json.loads(ctx.tools["baton"]({"action": "seal", "path": f, "author": "selftest"}))
-    v = json.loads(ctx.tools["baton"]({"action": "verify", "path": f}))
+    s = json.loads(ctx.tools["agenttrust_seal"]({"action": "seal", "path": f, "author": "selftest"}))
+    v = json.loads(ctx.tools["agenttrust_seal"]({"action": "verify", "path": f}))
     if not (s["success"] and v["holds"] and v["code"] == 0):
         fail(f"clean seal did not hold: {s} {v}")
 
     # 2. tamper caught, through the slash command
     with open(f, "a") as fh:
         fh.write("state: red\n")
-    out = ctx.commands["baton"](f"verify {f}")
+    out = ctx.commands["agenttrust-seal"](f"verify {f}")
     if not out.startswith("SEAL BROKEN"):
         fail(f"tamper not caught: {out}")
-    if json.loads(ctx.tools["baton"]({"action": "verify", "path": f}))["holds"]:
+    if json.loads(ctx.tools["agenttrust_seal"]({"action": "verify", "path": f}))["holds"]:
         fail("tamper reported as holding")
 
     # 2b. a path with a space works through the slash command, with and without an author
@@ -63,18 +63,18 @@ try:
     q = os.path.join(sp, "hand off.md")
     with open(q, "w") as fh:
         fh.write("spaced" + chr(10))
-    if not ctx.commands["baton"](f"seal {q} selftest").startswith("SEALED"):
+    if not ctx.commands["agenttrust-seal"](f"seal {q} selftest").startswith("SEALED"):
         fail("seal refused a path with a space")
-    if not ctx.commands["baton"](f'verify "{q}"').startswith("SEAL HOLDS"):
+    if not ctx.commands["agenttrust-seal"](f'verify "{q}"').startswith("SEAL HOLDS"):
         fail("verify refused a quoted path with a space")
-    if not ctx.commands["baton"](f"verify {q}").startswith("SEAL HOLDS"):
+    if not ctx.commands["agenttrust-seal"](f"verify {q}").startswith("SEAL HOLDS"):
         fail("verify refused an unquoted path with a space")
 
     # 3. missing seal refused (also missing file, corrupt seal)
     g = os.path.join(tmp, "never-sealed.md")
     with open(g, "w") as fh:
         fh.write("x")
-    r = json.loads(ctx.tools["baton"]({"action": "verify", "path": g}))
+    r = json.loads(ctx.tools["agenttrust_seal"]({"action": "verify", "path": g}))
     if r["code"] != 2 or r["holds"]:
         fail(f"missing seal not refused: {r}")
     if baton.core.verify(os.path.join(tmp, "ghost.md"))[0] != 2:
@@ -85,9 +85,9 @@ try:
         fail("corrupt seal not refused")
 
     # 4. interop: a seal written here verifies under the shell baton-seal (skipped if absent)
-    shell = "/home/hermes/bin/baton-seal"
+    shell = shutil.which("baton-seal") or ""
     note = "interop skipped (no baton-seal here)"
-    if os.path.exists(shell):
+    if shell and os.path.exists(shell):
         h = os.path.join(tmp, "interop.md")
         with open(h, "w") as fh:
             fh.write("hello")

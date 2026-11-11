@@ -1,13 +1,24 @@
-# Baton
+# AgentTrust Seal
 
 A Hermes plugin that proves a handoff was not changed.
 
 One agent finishes a file and seals it. The next agent verifies the seal before trusting the file. If one byte changed, the seal breaks. If there is no seal, verify refuses. It never says "fine" by default.
 
+## Who it is for, and why
+
+Agents report success all the time, and nothing checks it. When one agent hands a file to the next (research notes to a writer, a patch to a reviewer, an overnight report to the morning run), the second agent trusts whatever is sitting there.
+
+- Who: anyone running more than one Hermes agent, a scheduled job, or a handoff between sessions or machines.
+- When: at the moment work changes hands. The finishing agent seals; the receiving agent verifies before it reads.
+- What you get: one of three answers (SEAL HOLDS, SEAL BROKEN, NO SEAL) and a code an agent can act on, so a changed or half-written file stops the chain instead of being built on.
+- Where: in a Hermes chat or the desktop app with `/agenttrust-seal`, or as the `agenttrust_seal` tool an agent calls by itself.
+
+This is the first small, free piece of AgentTrust: proof for what AI agents say they did.
+
 ## What it adds
 
-- Slash command: `/baton seal <file> [author]` and `/baton verify <file>`
-- Tool: `baton` (action `seal` or `verify`, plus `path`, optional `author`), so an agent can call it by itself
+- Slash command: `/agenttrust-seal seal <file> [author]` and `/agenttrust-seal verify <file>`
+- Tool: `agenttrust_seal` (action `seal` or `verify`, plus `path`, optional `author`), so an agent can call it by itself
 
 A seal is a small file next to the original: `<file>.seal.json`. It holds the sha256, size, author, UTC time, git commit if any, and host. The format matches the shell tool `baton-seal`, so either one can verify the other's seals.
 
@@ -26,13 +37,13 @@ Local only. No network, no keys, no background work.
 Where: a terminal on the machine with this folder.
 
 ```bash
-python3 baton/selftest.py
+python3 agenttrust-seal/selftest.py
 ```
 
 You should see one line starting `SELFTEST PASS`. Any `SELFTEST FAIL` line means stop.
 
 ```bash
-hermes plugins validate baton
+hermes plugins validate agenttrust-seal
 ```
 
 You should see `Validation passed.`
@@ -43,20 +54,20 @@ Where: a terminal on the machine that runs Hermes. When: after the check above p
 
 1. Copy the folder in:
    ```bash
-   cp -r baton ~/.hermes/plugins/baton
+   cp -r agenttrust-seal ~/.hermes/plugins/agenttrust-seal
    ```
 2. Turn it on (plugins are off until you opt in):
    ```bash
-   hermes plugins enable baton
+   hermes plugins enable agenttrust-seal
    ```
 3. Restart Hermes so it loads the plugin. For the gateway or dashboard, relaunch that process.
-4. In a Hermes chat, type `/baton` and you should see the usage line.
+4. In a Hermes chat, type `/agenttrust-seal` and you should see the usage line.
 
 ## Use it
 
 ```
-/baton seal handoff.md alan
-/baton verify handoff.md
+/agenttrust-seal seal handoff.md alan
+/agenttrust-seal verify handoff.md
 ```
 
 Then edit `handoff.md` and run verify again. It says `SEAL BROKEN`.
@@ -64,13 +75,13 @@ Then edit `handoff.md` and run verify again. It says `SEAL BROKEN`.
 ## Remove
 
 ```bash
-hermes plugins disable baton
-rm -r ~/.hermes/plugins/baton
+hermes plugins disable agenttrust-seal
+rm -r ~/.hermes/plugins/agenttrust-seal
 ```
 
 ## Files
 
-- `plugin.yaml` manifest (declares the `baton` tool)
+- `plugin.yaml` manifest (declares the `agenttrust_seal` tool)
 - `__init__.py` registers the tool and the slash command
 - `core.py` seal and verify logic, standard library only
 - `selftest.py` proves hold, tamper caught, missing seal refused
@@ -88,7 +99,7 @@ What this plugin does on your machine, in full:
 
 ## Limits
 
-- Baton detects a change. It does not prevent one.
+- AgentTrust Seal detects a change. It does not prevent one.
 - The seal records a name, not a cryptographic signature, so it does not prove who sealed the file.
 - Anyone who can rewrite both the file and its seal can make a new seal that holds.
 

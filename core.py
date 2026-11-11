@@ -1,6 +1,6 @@
 """Baton core: seal a file and verify the seal. Pure stdlib, no Hermes imports.
 
-Seal format matches /home/hermes/bin/baton-seal, so either tool verifies the other's seals.
+Seal format matches the companion shell tool baton-seal, so either tool verifies the other's seals.
 Verify codes: 0 SEAL HOLDS, 1 SEAL BROKEN, 2 refused (no file, no seal, or unreadable seal).
 """
 import hashlib
