@@ -1,10 +1,11 @@
 name: baton
 label: Baton
 kind: standalone
-version: 0.1.0
+version: 0.1.1
 manifest_version: 2
 api_version: 1
 license: MIT
+requires_hermes: ">=0.22.2"
 tags: [integrity, handoff, audit]
 description: >
   Seal a file (sha256, bytes, author, UTC time) and verify the seal later, so

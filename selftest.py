@@ -57,6 +57,19 @@ try:
     if json.loads(ctx.tools["baton"]({"action": "verify", "path": f}))["holds"]:
         fail("tamper reported as holding")
 
+    # 2b. a path with a space works through the slash command, with and without an author
+    sp = os.path.join(tmp, "my folder")
+    os.makedirs(sp, exist_ok=True)
+    q = os.path.join(sp, "hand off.md")
+    with open(q, "w") as fh:
+        fh.write("spaced" + chr(10))
+    if not ctx.commands["baton"](f"seal {q} selftest").startswith("SEALED"):
+        fail("seal refused a path with a space")
+    if not ctx.commands["baton"](f'verify "{q}"').startswith("SEAL HOLDS"):
+        fail("verify refused a quoted path with a space")
+    if not ctx.commands["baton"](f"verify {q}").startswith("SEAL HOLDS"):
+        fail("verify refused an unquoted path with a space")
+
     # 3. missing seal refused (also missing file, corrupt seal)
     g = os.path.join(tmp, "never-sealed.md")
     with open(g, "w") as fh:
@@ -86,4 +99,4 @@ try:
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 
-print(f"SELFTEST PASS (3/3 + wiring): holds a clean file, catches a tamper, refuses a missing seal; {note}")
+print(f"SELFTEST PASS (4/4 + wiring): holds a clean file, catches a tamper, refuses a missing seal, handles paths with spaces; {note}")

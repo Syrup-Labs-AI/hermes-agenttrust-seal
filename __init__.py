@@ -49,11 +49,31 @@ def _tool(params, **kwargs):
     return json.dumps(run(params.get("action", ""), params.get("path", ""), params.get("author", "agent")))
 
 
+def _split_args(raw_args):
+    """Return (action, path, author). Paths may contain spaces, quoted or not."""
+    raw = (raw_args or "").strip()
+    action, _, rest = raw.partition(" ")
+    rest = rest.strip()
+    author = "agent"
+    if not rest:
+        return action, "", author
+    if rest[0] in "\"'":
+        end = rest.find(rest[0], 1)
+        if end > 0:
+            path, tail = rest[1:end], rest[end + 1:].strip()
+            return action, path, (tail or author) if action == "seal" else author
+    if action != "seal" or os.path.exists(rest):
+        return action, rest, author
+    head, _, last = rest.rpartition(" ")
+    if head and os.path.exists(head):
+        return action, head, last
+    return action, rest, author
+
+
 def _slash(raw_args):
-    parts = (raw_args or "").split()
-    if len(parts) >= 2 and parts[0] in ("seal", "verify"):
-        author = parts[2] if parts[0] == "seal" and len(parts) > 2 else "agent"
-        return run(parts[0], parts[1], author)["message"]
+    action, path, author = _split_args(raw_args)
+    if action in ("seal", "verify") and path:
+        return run(action, path, author)["message"]
     return "Usage: /baton seal <file> [author] | /baton verify <file>"
 
 

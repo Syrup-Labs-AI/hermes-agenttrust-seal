@@ -74,3 +74,24 @@ rm -r ~/.hermes/plugins/baton
 - `__init__.py` registers the tool and the slash command
 - `core.py` seal and verify logic, standard library only
 - `selftest.py` proves hold, tamper caught, missing seal refused
+
+## Disclosure
+
+What this plugin does on your machine, in full:
+
+- Network calls: none.
+- Credentials: none read, none stored. No environment variables required.
+- Background processes: none. It runs only when the tool or the slash command is called.
+- Shell commands: one. When sealing, it runs `git rev-parse --short HEAD` in the file's folder to record the commit, if the folder is a git checkout. If git is missing, the field is left empty.
+- Files written: one, `<file>.seal.json`, next to the file being sealed. It holds the sha256, size, author name, UTC time, the short git commit if any, and this machine's hostname. If you share a seal file, you share that hostname.
+- Files read: the file you name, and its seal.
+
+## Limits
+
+- Baton detects a change. It does not prevent one.
+- The seal records a name, not a cryptographic signature, so it does not prove who sealed the file.
+- Anyone who can rewrite both the file and its seal can make a new seal that holds.
+
+## Tested on
+
+Hermes Agent 0.22.2 (Linux) and 0.22.7 (Windows). Paths with spaces work, quoted or not.
