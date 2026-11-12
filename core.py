@@ -25,9 +25,9 @@ def _git_commit(path):
     try:
         out = subprocess.run(["git", "-C", os.path.dirname(os.path.abspath(path)), "rev-parse", "--short", "HEAD"],
                              capture_output=True, text=True, timeout=5)
-        return out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else "none"
+        return out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else ""
     except (OSError, subprocess.SubprocessError):
-        return "none"
+        return ""
 
 
 def seal(path, author="agent"):
