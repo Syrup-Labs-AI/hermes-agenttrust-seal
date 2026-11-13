@@ -48,7 +48,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          # Hermes gates its own dependencies on Python 3.14 and later.
+          python-version: "3.14"
       - name: Check out Hermes Agent ${{ matrix.hermes }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -67,8 +68,12 @@ jobs:
           hermes --version || true
           if ! hermes plugins validate --help >"$RUNNER_TEMP/help.txt" 2>&1; then
             tail -n 40 "$RUNNER_TEMP/help.txt"
-            echo "::warning::'hermes plugins validate --help' failed on this Hermes (output above); validate not run"
-            exit 0
+            if grep -q "invalid choice" "$RUNNER_TEMP/help.txt"; then
+              echo "::warning::this Hermes has no 'plugins validate' command; validate not run"
+              exit 0
+            fi
+            echo "::error::hermes did not start (output above), so the plugin was not validated"
+            exit 1
           fi
           mkdir -p "$RUNNER_TEMP/agenttrust-seal"
           cp plugin.yaml __init__.py core.py selftest.py README.md LICENSE "$RUNNER_TEMP/agenttrust-seal/"
