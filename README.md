@@ -34,7 +34,15 @@ Local only. No network, no keys, no background work.
 
 ## Check it first (no install)
 
-Where: a terminal on the machine with this folder.
+Where: a terminal on the machine that runs Hermes.
+
+Get the plugin into a folder named `agenttrust-seal`:
+
+```bash
+git clone https://github.com/Syrup-Labs-AI/hermes-agenttrust-seal agenttrust-seal
+```
+
+Then run its selftest:
 
 ```bash
 python3 agenttrust-seal/selftest.py
