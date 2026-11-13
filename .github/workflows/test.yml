@@ -64,8 +64,10 @@ jobs:
             echo "::warning::no hermes command after install; validate not run"
             exit 0
           fi
-          if ! hermes plugins validate --help >/dev/null 2>&1; then
-            echo "::warning::this Hermes has no 'plugins validate' command; validate not run"
+          hermes --version || true
+          if ! hermes plugins validate --help >"$RUNNER_TEMP/help.txt" 2>&1; then
+            tail -n 40 "$RUNNER_TEMP/help.txt"
+            echo "::warning::'hermes plugins validate --help' failed on this Hermes (output above); validate not run"
             exit 0
           fi
           mkdir -p "$RUNNER_TEMP/agenttrust-seal"
