@@ -1,0 +1,65 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    name: selftest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      # Every runner image ships ssh-keygen, so a skipped signing check here is a failure.
+      AGENTTRUST_SEAL_REQUIRE_SSH: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Selftest
+        run: python selftest.py
+      - name: Commit field test
+        run: python test_commit_field.py
+
+  hermes-validate:
+    # PyPI stops at hermes-agent 0.19.0, below this plugin's floor (0.22.2), so the
+    # versions under test are installed from the upstream release tags.
+    name: hermes plugins validate (Hermes ${{ matrix.hermes }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        hermes: ["v0.22.2", "v0.22.7", "v0.23.1"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install Hermes Agent ${{ matrix.hermes }}
+        env:
+          HERMES_TAG: ${{ matrix.hermes }}
+        run: python -m pip install "hermes-agent @ git+https://github.com/NousResearch/hermes-agent@${HERMES_TAG}"
+      - name: Validate the plugin, if this Hermes has the command
+        run: |
+          if ! command -v hermes >/dev/null 2>&1; then
+            echo "::warning::no hermes command after install; validate not run"
+            exit 0
+          fi
+          if ! hermes plugins validate --help >/dev/null 2>&1; then
+            echo "::warning::this Hermes has no 'plugins validate' command; validate not run"
+            exit 0
+          fi
+          hermes plugins validate .
