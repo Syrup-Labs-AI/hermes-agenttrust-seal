@@ -35,7 +35,7 @@ jobs:
   hermes-validate:
     # PyPI stops at hermes-agent 0.19.0, below this plugin's floor (0.22.2), and upstream
     # refuses wheel builds from source, so each version under test is checked out at its
-    # release tag and installed editable, which is the route upstream names for developers.
+    # release tag and installed from its own lock file with uv.
     name: hermes plugins validate (Hermes ${{ matrix.hermes }})
     runs-on: ubuntu-latest
     strategy:
@@ -58,7 +58,12 @@ jobs:
           path: .hermes-src
           persist-credentials: false
       - name: Install Hermes Agent ${{ matrix.hermes }}
-        run: python -m pip install -e .hermes-src
+        # Upstream resolves its dependencies through uv.lock; plain pip cannot solve them.
+        run: |
+          python -m pip install uv
+          cd .hermes-src
+          uv sync --frozen --no-dev --python "$(command -v python)"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Validate the plugin, if this Hermes has the command
         run: |
           if ! command -v hermes >/dev/null 2>&1; then
