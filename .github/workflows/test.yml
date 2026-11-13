@@ -1,0 +1,85 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    name: selftest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    env:
+      # Every runner image ships ssh-keygen, so a skipped signing check here is a failure.
+      AGENTTRUST_SEAL_REQUIRE_SSH: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Selftest
+        run: python selftest.py
+      - name: Commit field test
+        run: python test_commit_field.py
+
+  hermes-validate:
+    # PyPI stops at hermes-agent 0.19.0, below this plugin's floor (0.22.2), and upstream
+    # refuses wheel builds from source, so each version under test is checked out at its
+    # release tag and installed from its own lock file with uv.
+    name: hermes plugins validate (Hermes ${{ matrix.hermes }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        hermes: ["v0.22.2", "v0.22.7", "v0.23.1"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # Hermes gates its own dependencies on Python 3.14 and later.
+          python-version: "3.14"
+      - name: Check out Hermes Agent ${{ matrix.hermes }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NousResearch/hermes-agent
+          ref: ${{ matrix.hermes }}
+          path: .hermes-src
+          persist-credentials: false
+      - name: Install Hermes Agent ${{ matrix.hermes }}
+        # Upstream resolves its dependencies through uv.lock; plain pip cannot solve them.
+        run: |
+          python -m pip install uv
+          cd .hermes-src
+          uv sync --frozen --no-dev --python "$(command -v python)"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Validate the plugin, if this Hermes has the command
+        run: |
+          if ! command -v hermes >/dev/null 2>&1; then
+            echo "::warning::no hermes command after install; validate not run"
+            exit 0
+          fi
+          hermes --version || true
+          if ! hermes plugins validate --help >"$RUNNER_TEMP/help.txt" 2>&1; then
+            tail -n 40 "$RUNNER_TEMP/help.txt"
+            if grep -q "invalid choice" "$RUNNER_TEMP/help.txt"; then
+              echo "::warning::this Hermes has no 'plugins validate' command; validate not run"
+              exit 0
+            fi
+            echo "::error::hermes did not start (output above), so the plugin was not validated"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/agenttrust-seal"
+          cp plugin.yaml __init__.py core.py selftest.py README.md LICENSE "$RUNNER_TEMP/agenttrust-seal/"
+          hermes plugins validate "$RUNNER_TEMP/agenttrust-seal"
