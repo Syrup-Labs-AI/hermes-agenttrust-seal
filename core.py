@@ -2,7 +2,11 @@
 
 Seal format matches the companion shell tool baton-seal, so either tool verifies the other's seals.
 Verify codes: 0 SEAL HOLDS, 1 SEAL BROKEN, 2 refused (no file, no seal, unreadable seal, or a
-signature that could not be checked), 3 SEAL FORGED (a signature was required and is bad or absent).
+signature that could not be checked), 3 SEAL FORGED (a signature was required and is bad, absent,
+or made for a different record or file name).
+
+The signature covers the whole seal record (namespace, file name, sha256, size, author, time, commit,
+and host if present), not only the sha256, so a signed seal cannot be edited or moved to another file.
 
 Signing is optional and uses the ssh-keygen already on the machine. This module never creates a key,
 never opens a key file, and never reads a key from the environment: it hands the path you name to
@@ -47,14 +51,20 @@ def _ssh_keygen():
     return shutil.which("ssh-keygen")
 
 
-def _sign(digest, key_path):
-    """Sign the sha256 text with ssh-keygen. Returns (signature_text, error_text)."""
+def _payload(rec):
+    """The exact bytes a signature covers: every field of the seal record except the signature itself."""
+    body = {k: v for k, v in rec.items() if k != "signature"}
+    return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def _sign(payload, key_path):
+    """Sign the payload bytes with ssh-keygen. Returns (signature_text, error_text)."""
     exe = _ssh_keygen()
     if not exe:
         return "", "ssh-keygen was not found on this machine"
     try:
         out = subprocess.run([exe, "-Y", "sign", "-f", key_path, "-n", SIG_NAMESPACE],
-                             input=digest.encode("ascii"), capture_output=True, timeout=30)
+                             input=payload, capture_output=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as e:
         return "", str(e)
     sig = out.stdout.decode("ascii", "replace").replace("\r\n", "\n").strip()
@@ -64,7 +74,7 @@ def _sign(digest, key_path):
     return sig + "\n", ""
 
 
-def _check_signature(digest, signature, signers):
+def _check_signature(payload, signature, signers):
     """Returns (ok, principal_or_reason). ok is True only when ssh-keygen accepts the signature."""
     exe = _ssh_keygen()
     if not exe:
@@ -81,10 +91,10 @@ def _check_signature(digest, signature, signers):
             return False, "the signing key is not in the signers file"
         for name in names:
             ok = subprocess.run([exe, "-Y", "verify", "-f", signers, "-I", name, "-n", SIG_NAMESPACE,
-                                 "-s", sigfile], input=digest.encode("ascii"), capture_output=True, timeout=30)
+                                 "-s", sigfile], input=payload, capture_output=True, timeout=30)
             if ok.returncode == 0:
                 return True, name
-        return False, "the signature does not match the sealed sha256"
+        return False, "the signature does not match this seal record"
     except (OSError, subprocess.SubprocessError) as e:
         return False, str(e)
     finally:
@@ -117,11 +127,11 @@ def seal(path, author="agent", include_host=False, sign_key=None):
         if not _ssh_keygen():
             signed = "  UNSIGNED: ssh-keygen was not found on this machine, so the seal carries no signature"
         else:
-            sig, err = _sign(rec["sha256"], sign_key)
+            rec["signature_namespace"] = SIG_NAMESPACE
+            sig, err = _sign(_payload(rec), sign_key)
             if not sig:
                 return 2, f"REFUSED: signing failed, nothing was sealed ({err})", None
             rec["signature"] = sig
-            rec["signature_namespace"] = SIG_NAMESPACE
             signed = "  SIGNED"
     with open(path + SEAL_SUFFIX, "w") as f:
         json.dump(rec, f)
@@ -145,6 +155,7 @@ def verify(path, signers=None):
             rec = json.load(f)
         want = rec["sha256"]
         signature = rec.get("signature", "")
+        payload = _payload(rec)
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return 2, f"NO SEAL: {sp} is unreadable or has no sha256"
     note = ""
@@ -156,10 +167,13 @@ def verify(path, signers=None):
             return 3, f"SEAL FORGED: {path} has a seal with no signature, and a signature was required"
         if not _ssh_keygen():
             return 2, "REFUSED: ssh-keygen was not found on this machine, so the signature cannot be checked"
-        ok, detail = _check_signature(want, signature, signers)
+        ok, detail = _check_signature(payload, signature, signers)
         if not ok:
             return 3, f"SEAL FORGED: {path} has a seal whose signature fails ({detail})"
-        note = f"; signed by {detail}"
+        if rec.get("signature_namespace") != SIG_NAMESPACE or rec.get("file") != os.path.basename(path):
+            return 3, (f"SEAL FORGED: {path} carries a signed seal made for another file "
+                       f"({rec.get('file')!r}), so it does not vouch for this one")
+        note = f"; signed by {detail}, sealed {rec.get('sealed_at')} by {rec.get('author')}"
     elif signature:
         note = "; the seal is signed but the signature was NOT checked (name a signers file to check it)"
     if want == _sha256(path):

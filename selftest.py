@@ -108,6 +108,10 @@ try:
 
     slash = ctx.commands["agenttrust-seal"]
 
+    def operator_seal(p, author="agent", sign_key=None):
+        """What the slash command and the command line reach; the tool never passes a key here."""
+        return baton.run("seal", p, author, sign_key=sign_key)
+
     def fresh(name, text="state: green\n"):
         p = os.path.join(tmp, name)
         with open(p, "w") as fh:
@@ -144,11 +148,11 @@ try:
     u = fresh("nokeygen.md")
     baton.core._ssh_keygen = lambda: None
     try:
-        r = tool(action="seal", path=u, sign_key=fakekey)
+        r = operator_seal(u, sign_key=fakekey)
         if r["code"] != 0 or r["signed"] or "signature" in seal_of(u) or "UNSIGNED" not in r["message"] \
                 or "ssh-keygen" not in r["message"]:
             fail(f"missing ssh-keygen did not fall back to a clearly unsigned seal: {r}")
-        if baton.core._sign("0" * 64, fakekey)[0] or baton.core._check_signature("0" * 64, "x", fakekey)[0]:
+        if baton.core._sign(b"0" * 64, fakekey)[0] or baton.core._check_signature(b"0" * 64, "x", fakekey)[0]:
             fail("signing helpers did not return early without ssh-keygen")
         rec = seal_of(u)
         rec["signature"] = "-----BEGIN SSH SIGNATURE-----\nAAAA\n-----END SSH SIGNATURE-----\n"
@@ -159,7 +163,7 @@ try:
             fail(f"a signature that cannot be checked was not refused: {r}")
     finally:
         baton.core._ssh_keygen = real_keygen
-    if tool(action="seal", path=u, sign_key=os.path.join(tmp, "no-such-key"))["code"] != 2:
+    if operator_seal(u, sign_key=os.path.join(tmp, "no-such-key"))["code"] != 2:
         fail("a missing key file was not refused")
 
     # 7. signed seals, with a throwaway key that lives and dies in this temp folder
@@ -186,7 +190,7 @@ try:
             fh.write(f"stranger@example {other_pub}\n")
 
         d = fresh("signed.md")
-        r = tool(action="seal", path=d, author="selftest", sign_key=key)
+        r = operator_seal(d, author="selftest", sign_key=key)
         if not (r["code"] == 0 and r["signed"] and "BEGIN SSH SIGNATURE" in seal_of(d).get("signature", "")):
             fail(f"seal with a key did not store a signature: {r['message']}")
         r = tool(action="verify", path=d, signers=signers)
@@ -213,14 +217,51 @@ try:
         if r["code"] != 3 or not r["forged"] or not r["message"].startswith("SEAL FORGED"):
             fail(f"an unsigned re-seal passed where a signature was required: {r}")
         resealed = seal_of(d)
-        resealed["signature"] = good["signature"]  # old signature pasted onto the new sha256
+        resealed["signature"] = good["signature"]  # old signature pasted onto the new record
+        resealed["signature_namespace"] = good["signature_namespace"]
         with open(d + ".seal.json", "w") as fh:
             json.dump(resealed, fh)
         if tool(action="verify", path=d, signers=signers)["code"] != 3:
             fail("a signature copied from another seal was not FORGED")
-        tool(action="seal", path=d, sign_key=other)
+        operator_seal(d, sign_key=other)
         if tool(action="verify", path=d, signers=signers)["code"] != 3:
             fail("a re-seal signed by a stranger's key was not FORGED")
+
+        # the signature binds the whole record: no field can be edited, and the seal cannot move to another file
+        m = fresh("bound.md")
+        operator_seal(m, author="selftest", sign_key=key)
+        signed_rec = seal_of(m)
+        for field, value in (("author", "someone-else"), ("sealed_at", "2099-01-01T00:00:00Z"),
+                             ("bytes", 1), ("git_commit", "deadbee"), ("host", "added-later")):
+            edited = dict(signed_rec, **{field: value})
+            with open(m + ".seal.json", "w") as fh:
+                json.dump(edited, fh)
+            r = tool(action="verify", path=m, signers=signers)
+            if r["code"] != 3:
+                fail(f"editing {field} in a signed seal was not FORGED: {r}")
+        twin = fresh("other-name.md")  # same bytes, different file: the old signed seal is replayed onto it
+        with open(twin + ".seal.json", "w") as fh:
+            json.dump(signed_rec, fh)
+        if tool(action="verify", path=twin)["code"] != 0:
+            fail("an unsigned-style check of a copied seal should still hold by hash (unchanged behaviour)")
+        r = tool(action="verify", path=twin, signers=signers)
+        if r["code"] != 3 or "another file" not in r["message"]:
+            fail(f"a signed seal replayed onto another file was not FORGED: {r}")
+        with open(m + ".seal.json", "w") as fh:
+            json.dump(signed_rec, fh)
+        r = tool(action="verify", path=m, signers=signers)
+        if r["code"] != 0 or signed_rec["sealed_at"] not in r["message"]:
+            fail(f"the untouched signed seal no longer holds, or hides its signed time: {r}")
+
+        # the tool an agent calls can never sign, whatever arguments the model sends
+        t = fresh("agent-tries.md")
+        r = tool(action="seal", path=t, sign_key=key)
+        if r["code"] != 2 or r.get("signed") or os.path.exists(t + ".seal.json"):
+            fail(f"the agent-facing tool accepted a signing key: {r}")
+        if "sign_key" in baton.SCHEMA["parameters"]["properties"]:
+            fail("the tool schema still offers sign_key to the model")
+        if tool(action="seal", path=t)["signed"] or "signature" in seal_of(t):
+            fail("the tool made a signed seal")
 
         # slash command and command line, with a signers path that has a space in it
         e = fresh("cli.md")
@@ -272,7 +313,7 @@ try:
             got = guard(tool_name="read_file", args={"path": ok_file}, task_id="t")
             if not (got and got["action"] == "block" and "SEAL FORGED" in got["message"]):
                 fail(f"guard with signers did not block an unsigned seal as FORGED: {got}")
-            tool(action="seal", path=ok_file, sign_key=key)
+            operator_seal(ok_file, sign_key=key)
             if guard(tool_name="read_file", args={"path": ok_file}, task_id="t") is not None:
                 fail("guard with signers blocked a properly signed file")
     finally:

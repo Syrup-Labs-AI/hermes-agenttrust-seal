@@ -23,8 +23,8 @@ SCHEMA = {
         "action=seal writes <path>.seal.json (sha256, author, UTC time). "
         "action=verify returns holds=true only if the file still matches its seal. "
         "A missing file or missing seal is refused, never treated as a pass. "
-        "Optional: sign_key signs the seal with an existing SSH key; signers makes verify require "
-        "a valid signature (code 3, SEAL FORGED, if it is bad or absent)."
+        "Optional: signers makes verify require a valid signature (code 3, SEAL FORGED, if it is "
+        "bad or absent). This tool cannot sign: seals it makes are unsigned."
     ),
     "parameters": {
         "type": "object",
@@ -34,8 +34,6 @@ SCHEMA = {
             "author": {"type": "string", "description": "Who is sealing (seal only). Default: agent"},
             "include_host": {"type": "boolean",
                              "description": "seal only. Write this machine's hostname into the seal. Default: false"},
-            "sign_key": {"type": "string",
-                         "description": "seal only. Path of an existing SSH private key to sign the seal with"},
             "signers": {"type": "string",
                         "description": "verify only. Path of an OpenSSH allowed-signers file; a valid signature is then required"},
         },
@@ -62,11 +60,17 @@ def _truthy(value):
     return bool(value)
 
 
+SIGN_REFUSAL = ("REFUSED: the agenttrust_seal tool cannot sign, because the model chooses its arguments. "
+                "Nothing was sealed. A person signs with /agenttrust-seal seal <file> --sign <key> or the command line.")
+
+
 def _tool(params, **kwargs):
+    """The tool an agent calls. It seals unsigned and verifies; it never signs, whatever it is passed."""
     del kwargs
+    if any(k in params for k in ("sign_key", "sign", "key")):
+        return json.dumps({"success": False, "code": 2, "message": SIGN_REFUSAL, "seal": None, "signed": False})
     return json.dumps(run(params.get("action", ""), params.get("path", ""), params.get("author", "agent"),
-                          include_host=params.get("include_host", False), sign_key=params.get("sign_key"),
-                          signers=params.get("signers")))
+                          include_host=params.get("include_host", False), signers=params.get("signers")))
 
 
 _VALUE_FLAG = r"(?:^|\s)--%s\s+(?:\"([^\"]*)\"|'([^']*)'|(.+?))(?=\s+--|\s*$)"
