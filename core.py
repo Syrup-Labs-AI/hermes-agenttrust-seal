@@ -37,6 +37,11 @@ def _sha256(path):
     return h.hexdigest()
 
 
+def _is_sha256(value):
+    """True for 64 hex characters, which is the only thing a seal's sha256 field may hold."""
+    return len(value) == 64 and all(c in "0123456789abcdefABCDEF" for c in value)
+
+
 def _git_commit(path):
     try:
         out = subprocess.run(["git", "-C", os.path.dirname(os.path.abspath(path)), "rev-parse", "--short", "HEAD"],
@@ -176,7 +181,9 @@ def verify(path, signers=None):
         note = f"; signed by {detail}, sealed {rec.get('sealed_at')} by {rec.get('author')}"
     elif signature:
         note = "; the seal is signed but the signature was NOT checked (name a signers file to check it)"
-    if want == _sha256(path):
+    if not isinstance(want, str) or not _is_sha256(want):
+        return 2, f"NO SEAL: {sp} is unreadable or has no sha256"
+    if want.lower() == _sha256(path):
         return 0, f"SEAL HOLDS: {path} unchanged since sealing{note}"
     return 1, f"SEAL BROKEN: {path} was changed after sealing{note}"
 
