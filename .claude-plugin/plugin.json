@@ -1,0 +1,12 @@
+{
+  "name": "agenttrust-seal",
+  "version": "0.3.0",
+  "description": "Seal a file and verify the seal later, so the next agent can prove a handoff was not changed. Four answers: SEAL HOLDS, SEAL BROKEN, SEAL FORGED, NO SEAL. Local only: no network, no stored credentials.",
+  "author": {
+    "name": "Syrup Labs"
+  },
+  "homepage": "https://go.syrp.ai/agenttrust-seal",
+  "repository": "https://github.com/Syrup-Labs-AI/hermes-agenttrust-seal",
+  "license": "MIT",
+  "keywords": ["integrity", "handoff", "audit", "hermes"]
+}

@@ -102,6 +102,17 @@ Where: a terminal on the machine that runs Hermes. This changes your live Hermes
 4. Restart Hermes so it loads the plugin. For the gateway or dashboard, relaunch that process.
 5. In a Hermes chat, type `/agenttrust-seal` and you should see the usage line.
 
+## Install in Claude Code
+
+The same repository is also a Claude Code plugin. It needs Python 3 and nothing else.
+
+```
+/plugin marketplace add Syrup-Labs-AI/hermes-agenttrust-seal
+/plugin install agenttrust-seal@agenttrust
+```
+
+Then `/agenttrust-seal:agenttrust-seal verify handoff.md` runs the same command line, and the `agenttrust-seal` skill tells Claude to seal what it hands off and verify what it receives. Neither one signs: signing stays with a person at the terminal. Remove it with `/plugin uninstall agenttrust-seal@agenttrust`.
+
 ## Use it
 
 ```
@@ -126,6 +137,8 @@ rm -r ~/.hermes/plugins/agenttrust-seal
 - `selftest.py` proves hold, tamper caught, missing seal refused, hostname off by default, forged seal caught, an edited or replayed signed seal caught, the tool cannot sign, guard blocks only when opted in
 - `test_commit_field.py` proves the commit field is empty outside a git checkout
 - `test_bad_sha_field.py` proves a seal whose sha256 field is not a hash is refused (code 2), not reported as a changed file
+- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` make the repo a Claude Code plugin and its own marketplace
+- `commands/agenttrust-seal.md` the Claude Code slash command; `skills/agenttrust-seal/SKILL.md` the skill
 - `LICENSE` MIT
 - `.github/workflows/test.yml` runs the selftest and both tests on Linux, Windows and macOS
 
