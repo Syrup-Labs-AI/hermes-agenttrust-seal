@@ -1,0 +1,12 @@
+{
+  "name": "agenttrust",
+  "owner": {
+    "name": "Syrup Labs"
+  },
+  "plugins": [
+    {
+      "name": "agenttrust-seal",
+      "source": "./"
+    }
+  ]
+}

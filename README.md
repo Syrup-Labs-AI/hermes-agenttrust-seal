@@ -65,7 +65,7 @@ export AGENTTRUST_SEAL_GUARD=1
 export AGENTTRUST_SEAL_SIGNERS=~/.ssh/allowed_signers
 ```
 
-With the guard on, the plugin registers a Hermes `pre_tool_call` hook. When an agent calls `read_file` on a file that has a seal, the seal is checked first. BROKEN or FORGED blocks the read and tells the agent why. Everything else is let through: a file with no seal, a seal that holds, a missing file, any other tool.
+With the guard on, the plugin registers a Hermes `pre_tool_call` hook. When an agent calls `read_file` on a file that has a seal, the seal is checked first. BROKEN or FORGED blocks the read and tells the agent why. Everything else is let through: a file with no seal, a seal that holds, a seal that cannot be read (with signers set and `ssh-keygen` present, an edited seal fails its signature, is FORGED, and is blocked), a missing file, any other tool.
 
 ## Check it first (no install)
 
@@ -102,6 +102,17 @@ Where: a terminal on the machine that runs Hermes. This changes your live Hermes
 4. Restart Hermes so it loads the plugin. For the gateway or dashboard, relaunch that process.
 5. In a Hermes chat, type `/agenttrust-seal` and you should see the usage line.
 
+## Install in Claude Code
+
+The same repository is also a Claude Code plugin. It needs Python 3 and nothing else.
+
+```
+/plugin marketplace add Syrup-Labs-AI/hermes-agenttrust-seal
+/plugin install agenttrust-seal@agenttrust
+```
+
+Then `/agenttrust-seal:agenttrust-seal verify handoff.md` runs the same command line, and the `agenttrust-seal` skill tells Claude to seal what it hands off and verify what it receives. Neither one signs: signing stays with a person at the terminal. Remove it with `/plugin uninstall agenttrust-seal@agenttrust`.
+
 ## Use it
 
 ```
@@ -124,7 +135,12 @@ rm -r ~/.hermes/plugins/agenttrust-seal
 - `__init__.py` registers the tool, the slash command and, when opted in, the guard
 - `core.py` seal, sign and verify logic, standard library only; also the command line
 - `selftest.py` proves hold, tamper caught, missing seal refused, hostname off by default, forged seal caught, an edited or replayed signed seal caught, the tool cannot sign, guard blocks only when opted in
-- `.github/workflows/test.yml` runs the selftest on Linux, Windows and macOS
+- `test_commit_field.py` proves the commit field is empty outside a git checkout
+- `test_bad_sha_field.py` proves a seal whose sha256 field is not a hash is refused (code 2), not reported as a changed file
+- `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` make the repo a Claude Code plugin and its own marketplace
+- `commands/agenttrust-seal.md` the Claude Code slash command; `skills/agenttrust-seal/SKILL.md` the skill
+- `LICENSE` MIT
+- `.github/workflows/test.yml` runs the selftest and both tests on Linux, Windows and macOS
 
 ## Disclosure
 
